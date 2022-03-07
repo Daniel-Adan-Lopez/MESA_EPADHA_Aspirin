@@ -1,0 +1,423 @@
+#code by Daniel Lopez
+#for article "Intake of omega-3 fatty acids and aspirin and risk of coronary heart disease in the Multi-Ethnic Study of Atherosclerosis (MESA)"
+
+#this contains relevant models and sensitivity analyses
+
+#dataset MESA1_DL combines baseline + time to event + fatty acid data frames. 
+
+#packages
+library(survival)
+library(survminer)
+
+
+#EPA DHA cat - tertile variable with cut-points 
+#variable EPA_DHA is the sum of EPA and DHA levels (%)
+
+MESA1_DL$EPADHA_cat <- cut(MESA1_DL$EPA_DHA, breaks= c(0, 4, 8, Inf), labels = c("low", "intermediate" , "high"), right=FALSE)
+xy <- MESA1_DL[,c("EPA_DHA", "EPADHA_cat")]
+#low EPA+DHA is less than 4%     i.e. high risk
+#intermediate is >4% to 8% or less    i.e., intermediate risk
+#high is greater than 8%   i.e., low risk
+ 
+ 
+#kaplan Meier curves for epa/dha category and for aspirin category with respect to MI
+
+
+#making a years variable
+MESA1_DL$chdhttyrs <- MESA1_DL$chdhtt/365
+summary(MESA1_DL$chdhttyrs)
+attach(MESA1_DL)
+
+  #chdh
+ ggsurv <- ggsurvplot(
+    fit=survfit(Surv(chdhttyrs, chdh) ~ EPADHA_cat, data = MESA1_DL), 
+    xlab = "Years since baseline", 
+    ylab = "Cumulative Incidence of hard CHD",
+    legend.labs=c("low (<4%)","intermediate (4% - 8%)", "high (>8%)"), # Assign names to groups which are shown in the plot
+    legend.title="EPA+DHA %",
+    legend = c(.125, .8),
+    conf.int = F, # Adds a 95%-confidence interval
+    pval = T, pval.coord = c(.35,.11), # Displays the P-value in the plot
+    pval.method = F, # Shows the statistical method used for obtaining the P-value
+    ggtheme = theme_test(base_size=13),
+    break.y.by = 0.05,
+    fun = "event",
+    break.time.by = 3.00,
+    risk.table=FALSE,
+    risk.table.height = 0.13,
+    risk.table.col = "strata",
+    risk.table.y.text = FALSE,
+    xlim = c(0,18),
+    font.x = c(14, "bold", "black"), # Risk table color by groups
+    font.y = c(14, "bold", "black"),
+    cumevents=TRUE,
+    cumevents.y.text = FALSE,
+    cumevents.height = 0.11)
+  
+  ggsurv$table <- ggsurv$table + theme_cleantable()
+  ggsurv$cumevents <- ggsurv$cumevents + theme_cleantable()
+  ggsurv
+
+#chdh and aspirin use
+  ggsurv <- ggsurvplot(
+  fit=survfit(Surv(chdhttyrs, chdh) ~ asacat1c, data = MESA1_DL), 
+  xlab = "Years since baseline", 
+  ylab = "Cumulative Incidence of hard CHD",
+  size=1,
+  legend.labs=c("aspirin < 3 days per week", "aspirin \u2265 3 days per week"), # Assign names to groups which are shown in the plot
+  legend.title="Aspirin use",
+  legend = c(.135, .8),
+  conf.int = F, # Adds a 95%-confidence interval
+  pval = T, pval.coord = c(.35,.11), # Displays the P-value in the plot
+  pval.method = F, # Shows the statistical method used for obtaining the P-value
+  ggtheme = theme_test(base_size=13),
+  break.y.by = 0.05,
+  fun = "event",
+  break.time.by = 3.00,
+  risk.table=FALSE,
+  risk.table.height = 0.13,
+  risk.table.col = "strata",
+  risk.table.y.text = FALSE,
+  xlim = c(0,18),
+  font.x = c(14, "bold", "black"), # Risk table color by groups
+  font.y = c(14, "bold", "black"),
+  cumevents=TRUE,
+  cumevents.y.text = FALSE,
+  cumevents.height = 0.11)
+
+ggsurv$table <- ggsurv$table + theme_cleantable()
+ggsurv$cumevents <- ggsurv$cumevents + theme_cleantable()
+ggsurv
+
+ 
+###########################################################################
+#aspirin use
+
+table(MESA1_DL$asacat1c)
+# No    Yes 
+#5231   1299
+
+
+################################################################################
+#Models running just asacat1c and EPADHA categorized into low, medium, high
+#model building process not included in code. Only final models are shown. 
+
+
+
+summary(model <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                       +sbp1c+factor(lipid1c)+hdl1+factor(EPADHA_cat)+strata(factor(ldlcat1c))+factor(educ1), data=MESA1_DL))
+extractAIC(model)
+#5809.583
+cox.zph(model)
+summary(model)
+#factor(EPADHA_cat)low   0.231619  1.260639  0.112762  2.054   0.0400 *  
+#factor(EPADHA_cat)high -0.357165  0.699657  0.250509 -1.426   0.1539    
+#about a 26% increased CHD risk in those in low EPADHA category  (p=0.04)
+#about a 30% decreased CHD risk in those in high EPADHA category (p=0.15)
+
+
+#with interaction term
+summary(model <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                       +sbp1c+factor(lipid1c)+strata(factor(ldlcat1c))+hdl1+factor(EPADHA_cat)+factor(asacat1c)*factor(EPADHA_cat) + factor(educ1), data=MESA1_DL))
+#marginally significantly increased in the high category
+#                                            coef   exp(coef)  se(coef)   z   Pr(>|z|) 
+#factor(asacat1c)1:factor(EPADHA_cat)low   0.209835  1.233474  0.233257  0.900 0.368341    
+#factor(asacat1c)1:factor(EPADHA_cat)high  1.009367  2.743863  0.515844  1.957 0.050380 .
+#about a 23.3% increased CHD risk in those in low EPADHA category and regular aspirin use  (p=0.368)
+#about a 174% increased CHD risk in those in high EPADHA category and regular aspirin use  (p=0.0504)
+
+extractAIC(model)
+#38.000 5801.696
+
+exp(confint(model))
+#factor(asacat1c)1:factor(EPADHA_cat)low  0.7690057 1.9144064
+#factor(asacat1c)1:factor(EPADHA_cat)high 1.0328791 7.7815930
+
+#note: physical activity category did not change results and increased the AIC
+#note: leisure activity did not change results and increased the AIC
+
+
+###############################################################################
+#try removing potential mediators
+summary(model <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)+factor(EPADHA_cat), data=MESA1_DL))
+#factor(EPADHA_cat)low   0.243534  1.275750  0.110670  2.201 0.027769 *  
+#factor(EPADHA_cat)high -0.250155  0.778680  0.237969 -1.051 0.293162
+extractAIC(model)
+#33.000 7142.047
+
+#does not really change the estimates and explains less of the variance 
+###############################################################################
+
+#new dataframe for the imputation of the income variables. 
+#FIRST STEP : MISSING DATA INSPECTION
+library(mice)
+colSums(is.na(MESA1_DL))
+
+MESA_imputation <- MESA1_DL[, c( "asacat1c", "gender1", "age1c", "race1c", "site1c", "bmi1c", "cig1c", "dm031c", "htnmed1c", "income1", "FH_MI", "sbp1c", 
+                                "lipid1c", "ldlcat1c", "hdl1", "EPADHA_cat", "chdh", "chdhtt", "educ1")]
+saveRDS(MESA_imputation, "MESA_imputation.RDS")
+
+round(cor(MESA_imputation), 2)
+
+colSums(is.na(MESA_imputation))
+#idno   asacat1c    gender1      age1c     race1c     site1c      bmi1c      cig1c     dm031c   htnmed1c    income1      FH_MI      sbp1c    lipid1c   ldlcat1c       hdl1 
+# 0        286          0          0          0          0          0         22         24          3        273         14          3         15        113         26 
+#EPADHA_cat       chdh     chdhtt    educ1 
+#     241         29         29       23
+
+round(colSums(is.na(MESA_imputation))/nrow(MESA_imputation)*100,2)
+#idno   asacat1c    gender1      age1c     race1c     site1c      bmi1c      cig1c     dm031c   htnmed1c    income1      FH_MI      sbp1c    lipid1c   ldlcat1c       hdl1 
+# 0.00       4.20       0.00       0.00       0.00       0.00       0.00       0.32       0.35       0.04       4.01       0.21       0.04       0.22       1.66       0.38 
+#EPADHA_cat       chdh     chdhtt   educ1
+#  3.54       0.43       0.43       0.34
+
+#convert id to an integer
+MESA_imputation$id <- as.integer(MESA_imputation$id)
+str(MESA_imputation)
+MESA_imputation$asacat1c <- as.character(MESA_imputation$asacat1c)
+MESA_imputation$gender1 <- as.character(MESA_imputation$gender1)
+MESA_imputation$race1c <- as.character(MESA_imputation$race1c)
+MESA_imputation$site1c <- as.character(MESA_imputation$site1c)
+MESA_imputation$cig1c <- as.character(MESA_imputation$cig1c)
+MESA_imputation$dm031c <- as.character(MESA_imputation$dm031c)
+MESA_imputation$htnmed1c <- as.character(MESA_imputation$htnmed1c)
+MESA_imputation$income1 <- as.character(MESA_imputation$income1)
+MESA_imputation$FH_MI <- as.character(MESA_imputation$FH_MI)
+MESA_imputation$lipid1c <- as.character(MESA_imputation$lipid1c)
+MESA_imputation$ldlcat1c <- as.character(MESA_imputation$ldlcat1c)
+MESA_imputation$chdh <- as.numeric(MESA_imputation$chdh)
+MESA_imputation$educ1 <- as.character(MESA_imputation$educ1)
+
+
+MESA_imputation[sapply(MESA_imputation, is.character)] <- lapply(MESA_imputation[sapply(MESA_imputation, is.character)], 
+                                           as.factor)
+ 
+str(MESA_imputation)
+#note that chdh has to be numeric prior to the imputation 
+
+ini <- mice(MESA_imputation, maxit=0)
+method <- ini$method
+method["income1"] <- "pmm"
+method
+
+ini$predictorMatrix
+
+
+#testing out the model 
+test.mice.pmm <- mice(MESA_imputation, m=10, maxit=3, printFlag = TRUE, seed=123456)
+plot(test.mice.pmm, 1:3)
+
+
+#newest one with educ
+system.time(imp.pmm4 <- parlmice(MESA_imputation, cluster.seed=123453, method = method, maxit=20, donors=3, n.core=10, n.imp.core=10,  print = TRUE))
+#user  system elapsed 
+#9.89    3.81 2495.06
+
+plot(imp.pmm4)
+#good convergence
+class(MESA_imputation$chdh)
+MESA_imputation$chdh <- as.numeric(MESA_imputation$chdh)
+saveRDS(MESA_imputation, "MESA_imputation.rds")
+
+
+
+models <- with(imp.pmm4, coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                                      factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                                    +sbp1c+factor(lipid1c)+strata(factor(ldlcat1c))+hdl1+factor(EPADHA_cat)+factor(educ1)))
+
+summary(models)
+
+summary(pool(models), conf.int = 0.95, exponentiate = TRUE)
+#             term      estimate   std.error    statistic       df      p.value     2.5 %    97.5 %
+#factor(asacat1c)1      0.8696166 0.112755701 -1.238986632 439.3818 2.160119e-01 0.6967627 1.0853524
+#factor(EPADHA_cat)low  1.3107707 0.106265960  2.546584517 438.0995 1.121941e-02 1.0637079 1.6152176
+#factor(EPADHA_cat)high 0.7283309 0.231841720 -1.367311278 435.6724 1.722328e-01 0.4617798 1.1487421
+#about a 31% increased CHD risk in those in low EPADHA category  (p=0.0112) (6.4% to 61.5%)
+#about a 27% decreased CHD risk in those in high EPADHA category  (p=0.17) (-54% to 14.9%)
+ 
+  
+
+models1 <- with(imp.pmm4, coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                                 factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                               +sbp1c+factor(lipid1c)+strata(factor(ldlcat1c))+hdl1+factor(EPADHA_cat) + factor(asacat1c)*factor(EPADHA_cat)+factor(educ1)))
+
+summary(pool(models1), conf.int = 0.95, exponentiate = TRUE)
+#         term                            estimate   std.error    statistic     df      p.value     2.5 %      97.5 %
+#factor(asacat1c)1:factor(EPADHA_cat)low  1.1110341 0.224003876  0.47004200 422.2414 6.385677e-01 0.7153307 1.725631
+#factor(asacat1c)1:factor(EPADHA_cat)high 2.3764398 0.489380579  1.76877367 412.0458 7.767142e-02 0.9081093 6.218927
+#about an 11% increased CHD risk in those in low EPADHA+taking aspirin three times a day (p=.6)
+#a 137% increased CHD risk in those in high EPADHA+taking aspirin three times a day (p=0.07671)
+
+
+#models1 <- with(imp.pmm3, coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+#                                  factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+#                                +sbp1c+factor(lipid1c)+strata(factor(ldlcat1c))+hdl1+factor(EPADHA_cat) + factor(asacat1c)*factor(EPADHA_cat)))
+#summary(pool(models1), conf.int = 0.95, exponentiate = TRUE)
+#no change
+
+##########some diagnostics
+ imp.mesa <- data.frame(imp.pmm1$imp$income1)
+ head(imp.mesa[, 1:50])
+ 
+ #####
+ compare.percent.count <- function(orig,imp,counts){
+   nam=names(orig[colSums(is.na(orig))>0])
+   nam = nam[nam %in% counts]
+   output <- vector(length(nam), mode="list")
+   names(output)<-nam
+   for (i in 1:length(nam)){
+     data <- mice::complete(imp,"long")
+     ry= is.na(orig[,nam[i]])
+     ry[ry==TRUE]<-"imputed"
+     ry[ry==FALSE]<-"observed"
+     data <- cbind(data,ry)
+     colnames(data)[length(colnames(data))]<-paste0("R.",nam[i])
+     tab <- table(data[,nam[i]],data[,paste0("R.",nam[i])])
+     
+     
+     output[[i]]<- rbind("imputed"=round(tab[,1]/sum(tab[,1])*100,2),
+                         "observed"=round(tab[,2]/sum(tab[,2])*100,2))
+     
+   }
+   return(output)
+ }
+ 
+ 
+ result <- compare.percent.count(orig=MESA_imputation, imp=imp.pmm4, counts= c("income1"))
+ result
+ #         <$5k $40-49  $50-75k   $75-99k  $100k+   $5k-7.99k $8k-$11.99k $12k-$15.99k  $16k-$19.99k  $20k-$24.99k  $25k-$29.99k  $30k-$34.99k  $35k-$39.99k
+ #imputed  2.89   9.66   15.81      7.54    8.65      4.54      6.48         8.25         5.71          8.96          6.87            8.10          6.55
+ #observed 2.40   9.83   17.00      9.14    13.45     3.88      5.46         7.15         4.97          7.64          5.98            7.15          5.96
+ 
+ result <- compare.percent.count(orig=MESA_imputation, imp=imp.pmm4, counts= c("EPADHA_cat"))
+ result
+ #            intermediate (4%-8%)   low (<4%)    high (8%+)
+ #imputed         50.84                 41.74       7.42
+ #observed        49.28                 43.68       7.04
+ 
+ result <- compare.percent.count(orig=MESA_imputation, imp=imp.pmm4, counts= c("asacat1c"))
+ result
+ #          aspirin <3 days/week     aspirin 3 days/week or more
+ #imputed         78.72                     21.28
+ #observed        80.11                     19.89
+ # 
+ 
+######tables###################
+ 
+ library(tableone)
+  myVars <- c("asacat1c", "gender1", "age1c", "race1c", "site1c", "bmi1c", "cig1c", "dm031c", "htnmed1c", "HHIncome", "FH_MI", "sbp1c", 
+              "lipid1c", "ldlcat1c", "hdl1", "EPADHA_cat", "chdh", "chdhtt", "ldl1")
+ 
+ catVars <- c("asacat1c", "gender1", "race1c", "site1c", "cig1c", "dm031c", "htnmed1c", "HHIncome", "FH_MI", 
+              "lipid1c", "ldlcat1c", "EPADHA_cat", "chdh")
+ 
+ tab2 <- CreateTableOne(vars=myVars, data=MESA1_DL, factorVars=catVars)
+ tab2
+ 
+ #this will show all levels 
+ print(tab2, showAllLevels = TRUE, formatOptions = list(big.mark = ","))
+ 
+ #this will show missingness
+ summary(tab2)
+ 
+ tab3 <- CreateTableOne(vars=myVars, strata="chdh", data=MESA1_DL, factorVars=catVars)
+ #print(tab3, nonnormal= "pps_y_ss_severity_score" ,showAllLevels=TRUE,formatOptions=list(big.mark=","))
+ tab3Mat <- print(tab3, showAllLevels=TRUE,quote=FALSE, noSpaces=TRUE, printToggle=FALSE, includeNA=TRUE)
+ write.csv(tab3Mat, file="Table1a.csv")
+ tab3Mat
+ 
+ 
+ 
+ 
+ tab4 <- CreateTableOne(vars=myVars, strata=c("visit", "TBIbin"), data=dat1, factorVars=catVars)
+ print(tab4, showAllLevels=TRUE,formatOptions=list(big.mark=","))
+ tab4Mat <- print(tab4, showAllLevels=TRUE,quote=FALSE, noSpaces=TRUE, printToggle=FALSE, includeNA=TRUE)
+ write.csv(tab4Mat, file="Table1b.csv")
+ 
+ nonNormalVars <- c("pps_y_ss_severity_score")
+ 
+ 
+ #######
+ #categorizing income into fewer levels for the table
+ table(MESA1_DL$income1)
+ 
+ 
+ MESA1_DL<- MESA1_DL%>% 
+   mutate(HHIncome = case_when(
+     income1 == 1 ~ "$0 to 24,999",
+     income1 == 2 ~ "$0 to 24,999",
+     income1 == 3 ~ "$0 to 24,999",
+     income1 == 4 ~ "$0 to 24,999",
+     income1 == 5 ~ "$0 to 24,999",
+     income1 == 6 ~ "$0 to 24,999",
+     income1 == 7 ~ "$25,000 to $49,999",
+     income1 == 8 ~ "$25,000 to $49,999",
+     income1 == 9 ~ "$25,000 to $49,999",
+     income1 == 10 ~ "$25,000 to $49,999",
+     income1 == 11 ~ "$50,000 to $99,999",
+     income1 == 12 ~ "$50,000 to $99,999",
+     income1 == 13 ~ "$100,000+"))
+table(MESA1_DL$HHIncome)
+
+###############################################
+#checking with quintiles
+MESA1_DL$EPADHA_5cat <- cut(MESA1_DL$EPA_DHA, breaks= c(0, 4, 8, Inf), labels = c("low", "intermediate" , "high"), right=FALSE)
+
+MESA1_DL$EPADHA_5cat <- quantcut(MESA1_DL$EPA_DHA, q = 5, na.rm = TRUE)
+table(MESA1_DL$EPADHA_5cat)
+saveRDS(MESA1_DL, "MESA1_DL.rds")
+
+summary(model <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                       +sbp1c+factor(lipid1c)+hdl1+factor(EPADHA_5cat)+strata(factor(ldlcat1c))+factor(educ1), data=MESA1_DL))
+#reference here is lowest quantile
+#factor(EPADHA_5cat)(3.09,3.85]  0.0199991  1.0202004  0.1485120  0.135  0.89288    
+#factor(EPADHA_5cat)(3.85,4.74] -0.1216920  0.8854210  0.1607701 -0.757  0.44909    
+#factor(EPADHA_5cat)(4.74,6.06] -0.2425443  0.7846290  0.1717972 -1.412  0.15801    
+#factor(EPADHA_5cat)(6.06,22.1] -0.3796296  0.6841148  0.1881619 -2.018  0.04364 *
+#n=1315 for each group
+
+summary(model <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                       +sbp1c+factor(lipid1c)+hdl1+factor(EPADHA_5cat)+strata(factor(ldlcat1c))+factor(educ1)+factor(asacat1c)*factor(EPADHA_5cat), data=MESA1_DL))
+#reference is lowest group 
+#                                                     coef    exp(coef)  se(coef)  z    Pr(>|z|)
+#factor(asacat1c)1:factor(EPADHA_5cat)(3.09,3.85]  0.003500  1.003506  0.344089  0.010 0.991884    
+#factor(asacat1c)1:factor(EPADHA_5cat)(3.85,4.74] -0.165476  0.847490  0.356905 -0.464 0.642904    
+#factor(asacat1c)1:factor(EPADHA_5cat)(4.74,6.06] -0.061544  0.940311  0.361670 -0.170 0.864878    
+#factor(asacat1c)1:factor(EPADHA_5cat)(6.06,22.1]  0.320387  1.377660  0.380315  0.842 0.399550    
+######
+MESA1_DL$EPADHA_5cat <- relevel(MESA1_DL$EPADHA_5cat, ref = "[0.797,3.09]")
+#changing reference levels
+#factor(asacat1c)1:factor(EPADHA_5cat)[0.797,3.09]  0.165476  1.179955  0.356905  0.464 0.642904    
+#factor(asacat1c)1:factor(EPADHA_5cat)(3.09,3.85]   0.168976  1.184092  0.337786  0.500 0.616901    
+#factor(asacat1c)1:factor(EPADHA_5cat)(4.74,6.06]   0.103932  1.109525  0.355641  0.292 0.770104    
+#factor(asacat1c)1:factor(EPADHA_5cat)(6.06,22.1]   0.485863  1.625577  0.374481  1.297 0.194484 
+
+#so it still seems to be an increased risk - but not significant - for the highest level. 
+
+######################
+#plots
+library(survival)
+summary(model5 <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                       +sbp1c+factor(lipid1c)+hdl1+strata(EPADHA_cat)+(factor(ldlcat1c))+factor(educ1), data=MESA1_DL))
+ggcoxdiagnostics(model5)
+
+
+######
+#continuous EPA+DHA
+summary(model <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                       +sbp1c+factor(lipid1c)+hdl1+EPA_DHA+strata(factor(ldlcat1c))+factor(educ1), data=MESA1_DL))
+#EPA_DHA           -0.074613  0.928102  0.031311 -2.383 0.017175 *
+#factor(asacat1c)1 -0.092132  0.911985  0.117984 -0.781 0.434870
+
+#continuous EPA+DHA and aspirin interaction
+summary(model <- coxph(Surv(chdhtt, chdh) ~ factor(asacat1c)+ factor(gender1)+ age1c + factor(race1c) + factor(site1c)+ bmi1c + 
+                         factor(cig1c) + factor(dm031c) + factor(htnmed1c)+ factor(income1) + factor(FH_MI)
+                       +sbp1c+factor(lipid1c)+strata(factor(ldlcat1c))+hdl1+EPA_DHA+factor(asacat1c)*EPA_DHA + factor(educ1), data=MESA1_DL))
+#factor(asacat1c)1:EPA_DHA  0.036298  1.036964  0.062043  0.585 0.558524
